@@ -17,10 +17,16 @@ local default_config = {
   bigram_weight = 2,
   hl_group = 'Comment',
   filetypes = {},
-  accept_key = '<Tab>',
+  accept_key = '<C-j>',
+  cycle_next_key = '<C-n>',
+  cycle_prev_key = '<C-p>',
   perf_monitor = false,
   debounce_delay = 100,
-  large_buffer_threshold = 100000
+  large_buffer_threshold = 100000,
+  show_source = true,
+  max_candidates = 5,
+  hl_group_bigram = 'Comment',
+  hl_group_unigram = 'Comment'
 }
 
 local config = vim.deepcopy(default_config)
@@ -121,8 +127,30 @@ local function accept_prediction()
   if display.is_shown() then
     display.accept()
   else
-    -- If no prediction, insert Tab normally
-    local keys = vim.api.nvim_replace_termcodes('<Tab>', true, false, true)
+    -- If no prediction, insert default character
+    local keys = vim.api.nvim_replace_termcodes('<C-j>', true, false, true)
+    vim.api.nvim_feedkeys(keys, 'n', false)
+  end
+end
+
+-- Cycle to next prediction
+local function cycle_next()
+  if display.is_shown() then
+    display.cycle_next()
+  else
+    -- If no prediction, default behavior
+    local keys = vim.api.nvim_replace_termcodes('<C-n>', true, false, true)
+    vim.api.nvim_feedkeys(keys, 'n', false)
+  end
+end
+
+-- Cycle to previous prediction
+local function cycle_prev()
+  if display.is_shown() then
+    display.cycle_prev()
+  else
+    -- If no prediction, default behavior
+    local keys = vim.api.nvim_replace_termcodes('<C-p>', true, false, true)
     vim.api.nvim_feedkeys(keys, 'n', false)
   end
 end
@@ -176,6 +204,20 @@ local function setup_keymaps()
       desc = 'Accept word prediction'
     })
   end
+  
+  if config.cycle_next_key ~= '' then
+    vim.keymap.set('i', config.cycle_next_key, cycle_next, {
+      silent = true,
+      desc = 'Cycle to next prediction'
+    })
+  end
+  
+  if config.cycle_prev_key ~= '' then
+    vim.keymap.set('i', config.cycle_prev_key, cycle_prev, {
+      silent = true,
+      desc = 'Cycle to previous prediction'
+    })
+  end
 end
 
 -- Setup commands
@@ -215,6 +257,10 @@ local function setup_commands()
     local info = predict.get_prediction_info()
     print(vim.inspect(info))
   end, { desc = 'Show current prediction info' })
+  
+  vim.api.nvim_create_user_command('WordPredCandidates', function()
+    print(display.get_candidates_info())
+  end, { desc = 'Show current candidates info' })
   
   vim.api.nvim_create_user_command('WordPredUpdate', function()
     analyzer.update_frequencies()
@@ -262,6 +308,10 @@ function M.setup(user_config)
   vim.g.wordpred_perf_monitor = config.perf_monitor and 1 or 0
   vim.g.wordpred_debounce_delay = config.debounce_delay
   vim.g.wordpred_large_buffer_threshold = config.large_buffer_threshold
+  vim.g.wordpred_show_source = config.show_source and 1 or 0
+  vim.g.wordpred_max_candidates = config.max_candidates
+  vim.g.wordpred_hl_group_bigram = config.hl_group_bigram
+  vim.g.wordpred_hl_group_unigram = config.hl_group_unigram
   
   -- Setup plugin components
   setup_autocmds()

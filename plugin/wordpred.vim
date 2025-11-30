@@ -32,7 +32,31 @@ if !exists('g:wordpred_filetypes')
 endif
 
 if !exists('g:wordpred_accept_key')
-  let g:wordpred_accept_key = '<Tab>'
+  let g:wordpred_accept_key = '<C-j>'
+endif
+
+if !exists('g:wordpred_cycle_next_key')
+  let g:wordpred_cycle_next_key = '<C-n>'
+endif
+
+if !exists('g:wordpred_cycle_prev_key')
+  let g:wordpred_cycle_prev_key = '<C-p>'
+endif
+
+if !exists('g:wordpred_show_source')
+  let g:wordpred_show_source = 1
+endif
+
+if !exists('g:wordpred_max_candidates')
+  let g:wordpred_max_candidates = 5
+endif
+
+if !exists('g:wordpred_hl_group_bigram')
+  let g:wordpred_hl_group_bigram = 'Comment'
+endif
+
+if !exists('g:wordpred_hl_group_unigram')
+  let g:wordpred_hl_group_unigram = 'Comment'
 endif
 
 if !exists('g:wordpred_perf_monitor')
@@ -147,8 +171,30 @@ function! s:AcceptPrediction() abort
     return ''
   endif
   
-  " If no prediction, return Tab character for normal behavior
-  return "\<Tab>"
+  " If no prediction, return default character
+  return "\<C-j>"
+endfunction
+
+" Cycle to next prediction
+function! s:CycleNext() abort
+  if wordpred#display#IsShown()
+    call wordpred#display#CycleNext()
+    return ''
+  endif
+  
+  " If no prediction, return default behavior
+  return "\<C-n>"
+endfunction
+
+" Cycle to previous prediction
+function! s:CyclePrev() abort
+  if wordpred#display#IsShown()
+    call wordpred#display#CyclePrev()
+    return ''
+  endif
+  
+  " If no prediction, return default behavior
+  return "\<C-p>"
 endfunction
 
 " Setup autocommands
@@ -176,6 +222,15 @@ if !empty(g:wordpred_accept_key)
   execute 'inoremap <silent><expr> ' . g:wordpred_accept_key . ' <SID>AcceptPrediction()'
 endif
 
+" Key mappings for cycling through candidates
+if !empty(g:wordpred_cycle_next_key)
+  execute 'inoremap <silent><expr> ' . g:wordpred_cycle_next_key . ' <SID>CycleNext()'
+endif
+
+if !empty(g:wordpred_cycle_prev_key)
+  execute 'inoremap <silent><expr> ' . g:wordpred_cycle_prev_key . ' <SID>CyclePrev()'
+endif
+
 " Commands
 command! WordPredEnable let g:wordpred_enabled = 1
 command! WordPredDisable let g:wordpred_enabled = 0 | call wordpred#display#Hide()
@@ -187,6 +242,7 @@ command! WordPredDisableBuffer let b:wordpred_enabled = 0 | call wordpred#displa
 
 command! WordPredStats echo wordpred#analyzer#GetStats()
 command! WordPredInfo echo wordpred#predict#GetPredictionInfo()
+command! WordPredCandidates echo wordpred#display#GetCandidatesInfo()
 command! WordPredUpdate call wordpred#analyzer#UpdateFrequencies() | echo 'Model updated'
 command! WordPredClear call wordpred#analyzer#Clear() | echo 'Model cleared'
 

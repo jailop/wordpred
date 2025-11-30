@@ -5,7 +5,7 @@ local M = {}
 local analyzer = require('wordpred.analyzer')
 
 -- Get the word under cursor (current prefix being typed)
-local function get_current_word()
+function M.get_current_word()
   local line = vim.api.nvim_get_current_line()
   local col = vim.api.nvim_win_get_cursor(0)[2]
   
@@ -24,7 +24,7 @@ local function get_current_word()
 end
 
 -- Get the previous word before cursor
-local function get_previous_word()
+function M.get_previous_word()
   local line = vim.api.nvim_get_current_line()
   local col = vim.api.nvim_win_get_cursor(0)[2]
   
@@ -52,121 +52,177 @@ local function get_previous_word()
   end
   
   if start < end_pos then
-    return line:sub(start + 1, end_pos)
+    return line:sub(start + 1, end_pos):lower()
   end
   
   return ''
 end
 
--- Predict word using unigram model (frequency-based)
-function M.predict_word_unigram(prefix, bufnr)
+-- Get multiple prediction candidates (unigram model)
+function M.get_candidates_unigram(prefix, bufnr, max_candidates)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+  max_candidates = max_candidates or vim.g.wordpred_max_candidates or 5
   
   local min_prefix = vim.g.wordpred_min_prefix_length or 1
   if #prefix < min_prefix then
-    return ''
+    return {}
   end
   
   -- Get all words matching prefix
   local matches = analyzer.get_words_with_prefix(prefix, bufnr)
   
   if vim.tbl_isempty(matches) then
-    return ''
+    return {}
   end
   
-  -- Find word with highest frequency
-  local best_word = ''
-  local max_freq = 0
-  
+  -- Convert to list and sort by frequency
+  local candidates = {}
   for word, freq in pairs(matches) do
-    if freq > max_freq then
-      max_freq = freq
-      best_word = word
-    end
+    table.insert(candidates, {word = word, freq = freq, source = 'unigram'})
   end
   
-  return best_word
+  table.sort(candidates, function(a, b) return a.freq > b.freq end)
+  
+  -- Return top N candidates
+  local result = {}
+  for i = 1, math.min(max_candidates, #candidates) do
+    table.insert(result, candidates[i])
+  end
+  
+  return result
 end
 
--- Predict word using bigram model (context-aware)
-function M.predict_word_bigram(prev_word, prefix, bufnr)
+-- Predict word using unigram model (frequency-based)
+function M.predict_word_unigram(prefix, bufnr)
+  local candidates = M.get_candidates_unigram(prefix, bufnr, 1)
+  return #candidates > 0 and candidates[1].word or ''
+end
+
+-- Get multiple prediction candidates (bigram model)
+function M.get_candidates_bigram(prev_word, prefix, bufnr, max_candidates)
   bufnr = bufnr or vim.api.nvim_get_current_buf()
+  max_candidates = max_candidates or vim.g.wordpred_max_candidates or 5
   
   if prev_word == '' or #prefix < 1 then
-    return ''
+    return {}
   end
   
   -- Get all bigrams matching the pattern
   local matches = analyzer.get_bigrams_with_prefix(prev_word, prefix, bufnr)
   
   if vim.tbl_isempty(matches) then
-    return ''
+    return {}
   end
   
-  -- Find word with highest bigram frequency
-  local best_word = ''
-  local max_freq = 0
-  
+  -- Convert to list and sort by frequency
+  local candidates = {}
   for word, freq in pairs(matches) do
-    if freq > max_freq then
-      max_freq = freq
-      best_word = word
+    table.insert(candidates, {word = word, freq = freq, source = 'bigram'})
+  end
+  
+  table.sort(candidates, function(a, b) return a.freq > b.freq end)
+  
+  -- Return top N candidates
+  local result = {}
+  for i = 1, math.min(max_candidates, #candidates) do
+    table.insert(result, candidates[i])
+  end
+  
+  return result
+end
+
+-- Predict word using bigram model (context-aware)
+function M.predict_word_bigram(prev_word, prefix, bufnr)
+  local candidates = M.get_candidates_bigram(prev_word, prefix, bufnr, 1)
+  return #candidates > 0 and candidates[1].word or ''
+end
+
+-- Get multiple combined prediction candidates
+function M.get_candidates(prefix, bufnr, prev_word, max_candidates)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+  prev_word = prev_word or ''
+  max_candidates = max_candidates or vim.g.wordpred_max_candidates or 5
+  
+  local min_prefix = vim.g.wordpred_min_prefix_length or 1
+  if #prefix < min_prefix then
+    return {}
+  end
+  
+  -- Get candidates from both models
+  local bigram_candidates = {}
+  if prev_word ~= '' then
+    bigram_candidates = M.get_candidates_bigram(prev_word, prefix, bufnr, max_candidates)
+  end
+  
+  local unigram_candidates = M.get_candidates_unigram(prefix, bufnr, max_candidates)
+  
+  -- Merge and sort by weighted score
+  local all_candidates = {}
+  local bigram_weight = vim.g.wordpred_bigram_weight or 2
+  
+  -- Add bigram candidates with weighted score
+  for _, candidate in ipairs(bigram_candidates) do
+    local word = candidate.word
+    local score = candidate.freq * bigram_weight
+    all_candidates[word] = {
+      word = word,
+      score = score,
+      source = 'bigram',
+      freq = candidate.freq
+    }
+  end
+  
+  -- Add or merge unigram candidates
+  for _, candidate in ipairs(unigram_candidates) do
+    local word = candidate.word
+    if all_candidates[word] then
+      -- Word exists from bigram, compare scores
+      if candidate.freq > all_candidates[word].score then
+        all_candidates[word].score = candidate.freq
+        all_candidates[word].source = 'unigram'
+      end
+    else
+      all_candidates[word] = {
+        word = word,
+        score = candidate.freq,
+        source = 'unigram',
+        freq = candidate.freq
+      }
     end
   end
   
-  return best_word
+  -- Convert to list and sort by score
+  local result = {}
+  for _, candidate in pairs(all_candidates) do
+    table.insert(result, candidate)
+  end
+  
+  table.sort(result, function(a, b) return a.score > b.score end)
+  
+  -- Return top N
+  local final = {}
+  for i = 1, math.min(max_candidates, #result) do
+    table.insert(final, result[i])
+  end
+  
+  return final
 end
 
 -- Combined prediction: bigram + unigram with weighting
 function M.predict_word(prefix, bufnr, prev_word)
-  bufnr = bufnr or vim.api.nvim_get_current_buf()
-  prev_word = prev_word or ''
-  
-  local min_prefix = vim.g.wordpred_min_prefix_length or 1
-  if #prefix < min_prefix then
-    return ''
-  end
-  
-  -- Try bigram prediction first (context-aware)
-  local bigram_pred = ''
-  if prev_word ~= '' then
-    bigram_pred = M.predict_word_bigram(prev_word, prefix, bufnr)
-  end
-  
-  -- Try unigram prediction
-  local unigram_pred = M.predict_word_unigram(prefix, bufnr)
-  
-  -- If both predictions exist, choose based on frequency weighting
-  if bigram_pred ~= '' and unigram_pred ~= '' then
-    local bigram_freq = analyzer.get_bigram_frequency(prev_word, bigram_pred, bufnr)
-    local unigram_freq = analyzer.get_word_frequency(unigram_pred, bufnr)
-    local bigram_weight = vim.g.wordpred_bigram_weight or 2
-    
-    -- Prefer bigram if its weighted frequency is higher
-    if bigram_freq * bigram_weight >= unigram_freq then
-      return bigram_pred
-    else
-      return unigram_pred
-    end
-  end
-  
-  -- Return whichever prediction exists
-  if bigram_pred ~= '' then
-    return bigram_pred
-  end
-  
-  return unigram_pred
+  local candidates = M.get_candidates(prefix, bufnr, prev_word, 1)
+  return #candidates > 0 and candidates[1].word or ''
 end
 
 -- Get prediction for current cursor position
 function M.get_current_prediction()
-  local prefix = get_current_word()
+  local prefix = M.get_current_word()
   
   if prefix == '' then
     return ''
   end
   
-  local prev_word = get_previous_word()
+  local prev_word = M.get_previous_word()
   local prediction = M.predict_word(prefix, vim.api.nvim_get_current_buf(), prev_word)
   
   -- Return only the completion part (remove the prefix)
@@ -179,8 +235,8 @@ end
 
 -- Get full prediction info for debugging/display
 function M.get_prediction_info()
-  local prefix = get_current_word()
-  local prev_word = get_previous_word()
+  local prefix = M.get_current_word()
+  local prev_word = M.get_previous_word()
   
   if prefix == '' then
     return {

@@ -1,0 +1,623 @@
+*wordpred.txt*  Word Prediction Plugin for Vim/Neovim
+
+Author:  Based on TreeMk word prediction concept
+License: MIT
+
+==============================================================================
+CONTENTS                                                    *wordpred-contents*
+
+    1. Introduction ............................ |wordpred-intro|
+    2. Requirements ............................ |wordpred-requirements|
+    3. Installation ............................ |wordpred-installation|
+    4. Quick Start ............................. |wordpred-quickstart|
+    5. Configuration ........................... |wordpred-config|
+    6. Commands ................................ |wordpred-commands|
+    7. Functions ............................... |wordpred-functions|
+    8. Options ................................. |wordpred-options|
+    9. Examples ................................ |wordpred-examples|
+   10. Troubleshooting ......................... |wordpred-troubleshooting|
+   11. Performance ............................. |wordpred-performance|
+   12. About ................................... |wordpred-about|
+
+==============================================================================
+1. INTRODUCTION                                                *wordpred-intro*
+
+Word Prediction is a plugin that provides intelligent, context-aware word
+completion based on statistical language modeling. As you type in insert mode,
+the plugin analyzes the frequency of words in your buffer and suggests
+completions inline.
+
+Features:~
+  • Context-aware predictions using bigram models
+  • Frequency-based suggestions using unigram models
+  • Real-time inline display of predictions
+  • Configurable behavior and performance
+  • Works with both Vim 8+ and Neovim 0.5+
+
+The plugin uses two statistical models:
+  1. Unigram model: Tracks word frequencies
+  2. Bigram model: Tracks word pair (context) frequencies
+
+These are combined with configurable weighting to provide intelligent,
+context-aware word predictions.
+
+==============================================================================
+2. REQUIREMENTS                                         *wordpred-requirements*
+
+Minimum Requirements:~
+  • Vim 8.0+ or Neovim 0.5+
+  • VimScript support (Vim) or Lua support (Neovim)
+
+Recommended:~
+  • Neovim 0.7+ for optimal virtual text support
+  • Vim 8.1+ for text property support
+
+For best display experience:
+  • Neovim: Uses |nvim_buf_set_extmark()| for inline virtual text
+  • Vim 8.1+: Uses text properties for display
+  • Vim 8.0: Basic functionality, limited visual feedback
+
+==============================================================================
+3. INSTALLATION                                         *wordpred-installation*
+
+Using vim-plug:~
+>
+    Plug 'path/to/wordpred'
+<
+
+Using Packer (Neovim):~
+>
+    use 'path/to/wordpred'
+<
+
+Manual Installation:~
+
+Copy the plugin directory to your Vim runtime path:
+>
+    # For Vim
+    cp -r vim/* ~/.vim/
+
+    # For Neovim
+    cp -r vim/* ~/.config/nvim/
+<
+
+==============================================================================
+4. QUICK START                                            *wordpred-quickstart*
+
+Basic Usage:~
+
+1. Open a file in Vim/Neovim
+2. Enter insert mode (|i|)
+3. Start typing a word
+4. A gray prediction will appear inline after your cursor
+5. Press <Tab> to accept the prediction (configurable)
+6. Or continue typing to update or ignore the prediction
+
+Example Session:~
+
+1. Type: "The qui"
+2. Prediction appears: "ck" (if "quick" exists in buffer)
+3. Press <Tab> to complete "quick"
+
+Toggle the plugin:~
+>
+    :WordPredToggle
+<
+
+Check statistics:~
+>
+    :WordPredStats
+<
+
+==============================================================================
+5. CONFIGURATION                                              *wordpred-config*
+
+Basic Configuration (VimScript):~
+>
+    " Enable/disable plugin
+    let g:wordpred_enabled = 1
+
+    " Minimum prefix length before showing predictions
+    let g:wordpred_min_prefix_length = 1
+
+    " Key to accept prediction
+    let g:wordpred_accept_key = '<Tab>'
+
+    " Enable for specific filetypes only
+    let g:wordpred_filetypes = ['markdown', 'text']
+<
+
+Basic Configuration (Lua - Neovim):~
+>
+    require('wordpred').setup({
+      enabled = true,
+      min_prefix_length = 1,
+      accept_key = '<Tab>',
+      filetypes = {'markdown', 'text'}
+    })
+<
+
+See |wordpred-options| for all available options.
+
+==============================================================================
+6. COMMANDS                                                *wordpred-commands*
+
+                                                            *:WordPredEnable*
+:WordPredEnable         Enable word prediction globally.
+
+                                                           *:WordPredDisable*
+:WordPredDisable        Disable word prediction globally.
+
+                                                            *:WordPredToggle*
+:WordPredToggle         Toggle word prediction on/off.
+
+                                                      *:WordPredEnableBuffer*
+:WordPredEnableBuffer   Enable word prediction for current buffer only.
+                        Overrides global setting.
+
+                                                     *:WordPredDisableBuffer*
+:WordPredDisableBuffer  Disable word prediction for current buffer only.
+
+                                                            *:WordPredStats*
+:WordPredStats          Show frequency model statistics:
+                        - Number of unique words
+                        - Number of unique bigrams
+                        - Last update timestamp
+
+                                                             *:WordPredInfo*
+:WordPredInfo           Show detailed prediction information:
+                        - Current prefix being typed
+                        - Previous word (context)
+                        - Bigram prediction
+                        - Unigram prediction
+                        - Final prediction
+                        - Prediction source (bigram/unigram)
+
+                                                           *:WordPredUpdate*
+:WordPredUpdate         Manually update the frequency model for current
+                        buffer. Useful after large edits or if automatic
+                        updates are disabled.
+
+                                                            *:WordPredClear*
+:WordPredClear          Clear frequency model for current buffer.
+                        Frees memory and forces rebuild on next update.
+
+Performance Monitoring Commands:~
+
+                                                       *:WordPredPerfEnable*
+:WordPredPerfEnable     Enable performance monitoring.
+                        Tracks execution time of operations.
+
+                                                      *:WordPredPerfDisable*
+:WordPredPerfDisable    Disable performance monitoring.
+
+                                                        *:WordPredPerfStats*
+:WordPredPerfStats      Show performance statistics:
+                        - Update operation times
+                        - Prediction operation times
+                        - Display operation times
+                        - Average and last execution times
+
+                                                        *:WordPredPerfReset*
+:WordPredPerfReset      Reset performance statistics counters.
+
+==============================================================================
+7. FUNCTIONS                                              *wordpred-functions*
+
+The plugin provides several functions for advanced usage:
+
+Analyzer Functions:~
+
+                                          *wordpred#analyzer#UpdateFrequencies*
+wordpred#analyzer#UpdateFrequencies([{bufnr}])
+                        Update frequency models for specified buffer.
+                        If {bufnr} is omitted, uses current buffer.
+
+                                           *wordpred#analyzer#GetWordFrequency*
+wordpred#analyzer#GetWordFrequency({word}, [{bufnr}])
+                        Get frequency count for {word} in specified buffer.
+                        Returns 0 if word not found.
+
+                                         *wordpred#analyzer#GetBigramFrequency*
+wordpred#analyzer#GetBigramFrequency({word1}, {word2}, [{bufnr}])
+                        Get frequency count for word pair ({word1}, {word2}).
+                        Returns 0 if bigram not found.
+
+                                         *wordpred#analyzer#GetWordsWithPrefix*
+wordpred#analyzer#GetWordsWithPrefix({prefix}, [{bufnr}])
+                        Get dictionary of words starting with {prefix}.
+                        Returns: {word: frequency} dictionary.
+
+                                       *wordpred#analyzer#GetBigramsWithPrefix*
+wordpred#analyzer#GetBigramsWithPrefix({first_word}, {prefix}, [{bufnr}])
+                        Get dictionary of words that follow {first_word}
+                        and start with {prefix}.
+                        Returns: {word: frequency} dictionary.
+
+Prediction Functions:~
+
+                                              *wordpred#predict#PredictWord*
+wordpred#predict#PredictWord({prefix}, [{bufnr}], [{prev_word}])
+                        Get best prediction for {prefix} considering context.
+                        Combines unigram and bigram predictions.
+
+                                        *wordpred#predict#PredictWordUnigram*
+wordpred#predict#PredictWordUnigram({prefix}, [{bufnr}])
+                        Get prediction based on word frequency only.
+
+                                         *wordpred#predict#PredictWordBigram*
+wordpred#predict#PredictWordBigram({prev_word}, {prefix}, [{bufnr}])
+                        Get prediction based on context (bigram).
+
+                                     *wordpred#predict#GetCurrentPrediction*
+wordpred#predict#GetCurrentPrediction()
+                        Get prediction for current cursor position.
+                        Returns completion suffix only.
+
+Display Functions:~
+
+                                                    *wordpred#display#Show*
+wordpred#display#Show({text})
+                        Show {text} as inline prediction at cursor.
+
+                                                    *wordpred#display#Hide*
+wordpred#display#Hide()
+                        Hide current prediction.
+
+                                                  *wordpred#display#Accept*
+wordpred#display#Accept()
+                        Accept and insert current prediction.
+
+                                                  *wordpred#display#Update*
+wordpred#display#Update()
+                        Update prediction based on current cursor position.
+
+Performance Functions:~
+
+                                              *wordpred#performance#GetStats*
+wordpred#performance#GetStats()
+                        Get performance statistics dictionary.
+
+                                            *wordpred#performance#FormatStats*
+wordpred#performance#FormatStats()
+                        Get formatted performance statistics string.
+
+==============================================================================
+8. OPTIONS                                                  *wordpred-options*
+
+                                                        *g:wordpred_enabled*
+g:wordpred_enabled              boolean (default: 1)
+                        Enable or disable the plugin globally.
+                        Can be overridden per-buffer with |b:wordpred_enabled|.
+
+                                                *g:wordpred_min_prefix_length*
+g:wordpred_min_prefix_length    number (default: 1)
+                        Minimum number of characters to type before showing
+                        predictions. Higher values reduce distraction but
+                        delay predictions.
+
+                                                 *g:wordpred_update_interval*
+g:wordpred_update_interval      number (default: 10)
+                        Update frequency model every N text changes.
+                        Higher values improve performance but reduce accuracy.
+
+                                                  *g:wordpred_bigram_weight*
+g:wordpred_bigram_weight        number (default: 2)
+                        Weight multiplier for bigram predictions.
+                        Formula: if bigram_freq * weight >= unigram_freq,
+                                 prefer bigram (context-aware) prediction.
+                        Range: 1-10 recommended.
+                        Higher = more context-aware.
+
+                                                     *g:wordpred_hl_group*
+g:wordpred_hl_group             string (default: 'Comment')
+                        Highlight group for prediction display.
+                        Examples: 'Comment', 'NonText', 'SpecialComment'
+
+                                                    *g:wordpred_filetypes*
+g:wordpred_filetypes            list (default: [])
+                        List of filetypes to enable word prediction.
+                        Empty list = enable for all filetypes.
+                        Example: ['markdown', 'text', 'rst']
+
+                                                   *g:wordpred_accept_key*
+g:wordpred_accept_key           string (default: '<Tab>')
+                        Key mapping to accept prediction.
+                        Set to empty string to disable.
+                        Examples: '<Tab>', '<C-y>', '<C-Space>'
+
+Performance Options:~
+
+                                                  *g:wordpred_perf_monitor*
+g:wordpred_perf_monitor         boolean (default: 0)
+                        Enable performance monitoring.
+                        Tracks execution time of operations.
+                        Adds small overhead (~1-2%).
+
+                                                *g:wordpred_debounce_delay*
+g:wordpred_debounce_delay       number (default: 100)
+                        Debounce delay in milliseconds for display updates.
+                        Reduces CPU usage during rapid typing.
+                        0 = no debouncing.
+                        Range: 0-500 recommended.
+
+                                         *g:wordpred_large_buffer_threshold*
+g:wordpred_large_buffer_threshold  number (default: 100000)
+                        Buffer size threshold in characters.
+                        Buffers larger than this skip real-time updates.
+                        Range: 50000-200000 recommended.
+
+Buffer-Local Options:~
+
+                                                       *b:wordpred_enabled*
+b:wordpred_enabled              boolean
+                        Enable/disable for current buffer only.
+                        Overrides |g:wordpred_enabled|.
+                        Set with |:WordPredEnableBuffer| or
+                        |:WordPredDisableBuffer|.
+
+==============================================================================
+9. EXAMPLES                                                *wordpred-examples*
+
+Example 1: Basic Setup for Prose Writing~
+>
+    " Enable only for writing filetypes
+    let g:wordpred_enabled = 1
+    let g:wordpred_filetypes = ['markdown', 'text', 'rst']
+    
+    " Prefer context-aware predictions
+    let g:wordpred_bigram_weight = 4
+    
+    " Show predictions early
+    let g:wordpred_min_prefix_length = 1
+<
+
+Example 2: Performance-Optimized Setup~
+>
+    " Reduce CPU usage
+    let g:wordpred_update_interval = 20
+    let g:wordpred_debounce_delay = 150
+    
+    " Handle large files
+    let g:wordpred_large_buffer_threshold = 50000
+    
+    " Enable monitoring to track performance
+    let g:wordpred_perf_monitor = 1
+<
+
+Example 3: Custom Highlight~
+>
+    " Define custom highlight group
+    highlight WordPrediction ctermfg=244 guifg=#808080 gui=italic
+    
+    " Use custom group
+    let g:wordpred_hl_group = 'WordPrediction'
+<
+
+Example 4: Alternative Key Binding~
+>
+    " Use Ctrl-Y instead of Tab
+    let g:wordpred_accept_key = '<C-y>'
+    
+    " Or multiple keys
+    let g:wordpred_accept_key = '<Tab>'
+    inoremap <silent><expr> <C-Space> 
+          \ wordpred#display#IsShown() ? 
+          \ wordpred#display#Accept() : "\<C-Space>"
+<
+
+Example 5: Filetype-Specific Configuration~
+>
+    " Disable by default
+    let g:wordpred_enabled = 0
+    
+    " Enable for specific filetypes
+    autocmd FileType markdown let b:wordpred_enabled = 1
+    autocmd FileType text let b:wordpred_enabled = 1
+    
+    " Different settings for different types
+    autocmd FileType markdown let g:wordpred_bigram_weight = 3
+    autocmd FileType text let g:wordpred_bigram_weight = 2
+<
+
+Example 6: Neovim Lua Configuration~
+>
+    require('wordpred').setup({
+      enabled = true,
+      min_prefix_length = 2,
+      update_interval = 15,
+      bigram_weight = 3,
+      hl_group = 'Comment',
+      filetypes = {'markdown', 'rst'},
+      accept_key = '<Tab>',
+      
+      -- Performance tuning
+      perf_monitor = false,
+      debounce_delay = 100,
+      large_buffer_threshold = 100000
+    })
+<
+
+==============================================================================
+10. TROUBLESHOOTING                                *wordpred-troubleshooting*
+
+Predictions Not Showing~
+
+1. Check if plugin is enabled:
+>
+    :echo g:wordpred_enabled
+<
+
+2. Check buffer-local setting:
+>
+    :echo get(b:, 'wordpred_enabled', 'not set')
+<
+
+3. Check filetype filter:
+>
+    :echo g:wordpred_filetypes
+    :echo &filetype
+<
+
+4. Check if model has data:
+>
+    :WordPredStats
+<
+
+5. Manually update model:
+>
+    :WordPredUpdate
+<
+
+Tab Key Not Working~
+
+1. Check for mapping conflicts:
+>
+    :verbose imap <Tab>
+<
+
+2. Try alternative key:
+>
+    let g:wordpred_accept_key = '<C-y>'
+<
+
+3. Check if prediction is shown:
+>
+    :echo wordpred#display#IsShown()
+<
+
+Slow Performance~
+
+1. Enable performance monitoring:
+>
+    :WordPredPerfEnable
+    :WordPredPerfStats
+<
+
+2. Increase intervals:
+>
+    let g:wordpred_update_interval = 30
+    let g:wordpred_debounce_delay = 200
+<
+
+3. Reduce buffer threshold:
+>
+    let g:wordpred_large_buffer_threshold = 50000
+<
+
+4. Limit to specific filetypes:
+>
+    let g:wordpred_filetypes = ['markdown', 'text']
+<
+
+Incorrect Predictions~
+
+1. Update the model:
+>
+    :WordPredUpdate
+<
+
+2. Check model statistics:
+>
+    :WordPredStats
+<
+
+3. Adjust bigram weight:
+>
+    " More context-aware
+    let g:wordpred_bigram_weight = 4
+    
+    " More frequency-based
+    let g:wordpred_bigram_weight = 1
+<
+
+4. Ensure buffer has enough text (at least 50-100 words recommended)
+
+==============================================================================
+11. PERFORMANCE                                          *wordpred-performance*
+
+Performance Characteristics~
+
+Typical execution times:
+  • Frequency update: 5-15ms (typical document)
+  • Prediction generation: 1-5ms
+  • Display update: < 2ms
+
+Memory usage:
+  • Typical document (1000 words): ~100KB
+  • Large document (10000 words): ~1MB
+  • Per-buffer isolation prevents leaks
+
+Optimization Strategies~
+
+For Large Documents:
+>
+    let g:wordpred_update_interval = 50
+    let g:wordpred_debounce_delay = 200
+    let g:wordpred_large_buffer_threshold = 50000
+<
+
+For Fast Typing:
+>
+    let g:wordpred_debounce_delay = 50
+    let g:wordpred_update_interval = 15
+<
+
+For Slow Machines:
+>
+    let g:wordpred_update_interval = 30
+    let g:wordpred_debounce_delay = 200
+    let g:wordpred_filetypes = ['markdown', 'text']
+<
+
+Performance Monitoring~
+
+Enable monitoring to identify bottlenecks:
+>
+    :WordPredPerfEnable
+    :WordPredPerfStats
+<
+
+Interpret results:
+  • Update time < 10ms: Excellent
+  • Update time 10-50ms: Good
+  • Update time > 100ms: Consider optimization
+  
+  • Prediction time < 5ms: Excellent
+  • Prediction time 5-20ms: Good
+  • Prediction time > 20ms: May cause delays
+
+==============================================================================
+12. ABOUT                                                    *wordpred-about*
+
+Word Prediction Plugin~
+
+Inspired by the word prediction feature in TreeMk, a Qt-based Markdown editor.
+
+The plugin uses statistical language modeling (N-gram models) to provide
+intelligent, context-aware word completion:
+
+  • Unigram model: Tracks individual word frequencies
+  • Bigram model: Tracks word pair frequencies for context
+  • Weighted combination: Balances frequency vs context
+
+Repository:   https://github.com/yourusername/wordpred-vim
+Issues:       https://github.com/yourusername/wordpred-vim/issues
+License:      MIT
+
+Contributing:~
+
+Contributions are welcome! Areas of interest:
+  • Performance optimizations
+  • Additional language models (trigrams)
+  • Persistence (save/load models)
+  • Language-specific adaptations
+  • Integration with completion frameworks
+
+For more information:~
+  • See README.md for user documentation
+  • See CONFIGURATION.md for detailed configuration guide
+  • See IMPLEMENTATION_SUMMARY.md for technical details
+
+==============================================================================
+vim:tw=78:ts=8:ft=help:norl:

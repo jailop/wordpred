@@ -12,7 +12,10 @@ let s:current_prediction = {
       \ 'bufnr': -1,
       \ 'line': -1,
       \ 'col': -1,
-      \ 'extmark_id': -1
+      \ 'extmark_id': -1,
+      \ 'candidates': [],
+      \ 'current_index': 0,
+      \ 'source': 'none'
       \ }
 
 " Check if we're in Neovim with virtual text support
@@ -30,8 +33,10 @@ if s:HasVirtualText()
   let s:ns_id = nvim_create_namespace('wordpred')
 endif
 
-" Show prediction at current cursor position
-function! wordpred#display#Show(prediction_text) abort
+" Show prediction at current cursor position with source info
+function! wordpred#display#Show(prediction_text, ...) abort
+  let source = a:0 > 0 ? a:1 : 'unknown'
+  
   if empty(a:prediction_text)
     call wordpred#display#Hide()
     return
@@ -47,11 +52,12 @@ function! wordpred#display#Show(prediction_text) abort
   let s:current_prediction.bufnr = bufnr
   let s:current_prediction.line = line
   let s:current_prediction.col = col
+  let s:current_prediction.source = source
   
   if s:HasVirtualText()
-    call s:ShowNeovim(a:prediction_text, bufnr, line, col)
+    call s:ShowNeovim(a:prediction_text, bufnr, line, col, source)
   elseif s:HasTextProps()
-    call s:ShowVim(a:prediction_text, bufnr, line + 1, col)
+    call s:ShowVim(a:prediction_text, bufnr, line + 1, col, source)
   else
     " Fallback: no visual display
     " Prediction is still stored and can be accepted
@@ -59,16 +65,23 @@ function! wordpred#display#Show(prediction_text) abort
 endfunction
 
 " Show prediction using Neovim virtual text
-function! s:ShowNeovim(text, bufnr, line, col) abort
+function! s:ShowNeovim(text, bufnr, line, col, source) abort
   " Clear any existing prediction
   call nvim_buf_clear_namespace(a:bufnr, s:ns_id, 0, -1)
   
-  " Get highlight group
-  let hl_group = get(g:, 'wordpred_hl_group', 'Comment')
+  " Get highlight group based on source
+  let hl_group = s:GetHighlightGroup(a:source)
+  
+  " Add source indicator if enabled
+  let display_text = a:text
+  if get(g:, 'wordpred_show_source', 1)
+    let indicator = a:source ==# 'bigram' ? '⚡' : '●'
+    let display_text = a:text . ' ' . indicator
+  endif
   
   " Set extmark with virtual text
   let opts = {
-        \ 'virt_text': [[a:text, hl_group]],
+        \ 'virt_text': [[display_text, hl_group]],
         \ 'virt_text_pos': 'overlay',
         \ 'hl_mode': 'combine'
         \ }
@@ -77,12 +90,24 @@ function! s:ShowNeovim(text, bufnr, line, col) abort
   let s:current_prediction.extmark_id = extmark_id
 endfunction
 
+" Get highlight group based on prediction source
+function! s:GetHighlightGroup(source) abort
+  if a:source ==# 'bigram'
+    return get(g:, 'wordpred_hl_group_bigram', get(g:, 'wordpred_hl_group', 'Comment'))
+  else
+    return get(g:, 'wordpred_hl_group_unigram', get(g:, 'wordpred_hl_group', 'Comment'))
+  endif
+endfunction
+
 " Show prediction using Vim text properties
-function! s:ShowVim(text, bufnr, line, col) abort
+function! s:ShowVim(text, bufnr, line, col, source) abort
+  " Get highlight group based on source
+  let hl_group = s:GetHighlightGroup(a:source)
+  
   " Define property type if not exists
   if empty(prop_type_get('wordpred_prediction'))
     call prop_type_add('wordpred_prediction', {
-          \ 'highlight': get(g:, 'wordpred_hl_group', 'Comment'),
+          \ 'highlight': hl_group,
           \ 'priority': 0
           \ })
   endif
@@ -97,8 +122,7 @@ function! s:ShowVim(text, bufnr, line, col) abort
   endif
   
   " Highlight the cursor position to show where prediction would appear
-  " This is a fallback since Vim can't easily show inline virtual text
-  let w:wordpred_match_id = matchadd(get(g:, 'wordpred_hl_group', 'Comment'), 
+  let w:wordpred_match_id = matchadd(hl_group, 
         \ '\%' . a:line . 'l\%' . a:col . 'c', 0)
 endfunction
 
@@ -120,7 +144,10 @@ function! wordpred#display#Hide() abort
         \ 'bufnr': -1,
         \ 'line': -1,
         \ 'col': -1,
-        \ 'extmark_id': -1
+        \ 'extmark_id': -1,
+        \ 'candidates': [],
+        \ 'current_index': 0,
+        \ 'source': 'none'
         \ }
 endfunction
 
@@ -179,11 +206,88 @@ endfunction
 " Update prediction (convenience function)
 function! wordpred#display#Update() abort
   " Get prediction from predict module
-  let prediction = wordpred#predict#GetCurrentPrediction()
+  let prefix = wordpred#predict#GetCurrentWord()
+  let prev_word = wordpred#predict#GetPreviousWord()
   
-  if !empty(prediction)
-    call wordpred#display#Show(prediction)
+  if empty(prefix)
+    call wordpred#display#Hide()
+    return
+  endif
+  
+  " Get multiple candidates
+  let candidates = wordpred#predict#GetCandidates(prefix, bufnr('%'), prev_word)
+  
+  if empty(candidates)
+    call wordpred#display#Hide()
+    return
+  endif
+  
+  " Store candidates and show first one
+  let s:current_prediction.candidates = candidates
+  let s:current_prediction.current_index = 0
+  
+  let prediction = candidates[0]
+  let completion = strpart(prediction.word, len(prefix))
+  
+  if !empty(completion)
+    call wordpred#display#Show(completion, prediction.source)
   else
     call wordpred#display#Hide()
   endif
+endfunction
+
+" Cycle to next prediction candidate
+function! wordpred#display#CycleNext() abort
+  if empty(s:current_prediction.candidates)
+    return
+  endif
+  
+  let s:current_prediction.current_index = 
+        \ (s:current_prediction.current_index + 1) % len(s:current_prediction.candidates)
+  
+  call s:ShowCurrentCandidate()
+endfunction
+
+" Cycle to previous prediction candidate
+function! wordpred#display#CyclePrev() abort
+  if empty(s:current_prediction.candidates)
+    return
+  endif
+  
+  let s:current_prediction.current_index = 
+        \ (s:current_prediction.current_index + len(s:current_prediction.candidates) - 1) 
+        \ % len(s:current_prediction.candidates)
+  
+  call s:ShowCurrentCandidate()
+endfunction
+
+" Show current candidate from the list
+function! s:ShowCurrentCandidate() abort
+  if empty(s:current_prediction.candidates)
+    return
+  endif
+  
+  let prefix = wordpred#predict#GetCurrentWord()
+  let candidate = s:current_prediction.candidates[s:current_prediction.current_index]
+  let completion = strpart(candidate.word, len(prefix))
+  
+  if !empty(completion)
+    call wordpred#display#Show(completion, candidate.source)
+  endif
+endfunction
+
+" Get current candidate info (for display/debugging)
+function! wordpred#display#GetCandidatesInfo() abort
+  if empty(s:current_prediction.candidates)
+    return 'No candidates'
+  endif
+  
+  let info = printf('[%d/%d] ', 
+        \ s:current_prediction.current_index + 1,
+        \ len(s:current_prediction.candidates))
+  
+  let candidate = s:current_prediction.candidates[s:current_prediction.current_index]
+  let info .= printf('%s (%s)', candidate.word, candidate.source)
+  
+  return info
 endfunction

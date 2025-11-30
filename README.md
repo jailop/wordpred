@@ -4,12 +4,12 @@ A Vim/Neovim plugin that provides intelligent word prediction based on the conte
 
 ## Project Status
 
-**Current Phase: Week 5-6 (Performance & Configuration) - Completed ✓**
+**Current Phase: Week 7 (Documentation) - Completed ✓**
 
 ### Completed
 - [x] Project structure setup
 - [x] Frequency analyzer module (VimScript & Lua)
-- [x] Unit tests for analyzer
+- [x] Unit tests for analyzer  
 - [x] Prediction engine module (VimScript & Lua)
 - [x] Unit tests for prediction engine
 - [x] Display module (VimScript & Lua)
@@ -19,12 +19,25 @@ A Vim/Neovim plugin that provides intelligent word prediction based on the conte
 - [x] Debouncing and throttling
 - [x] Large buffer optimization
 - [x] Advanced configuration options
-- [x] Configuration guide
+- [x] Configuration guide (CONFIGURATION.md)
+- [x] Vim help documentation (`:help wordpred`)
+- [x] Usage examples (EXAMPLES.md)
+- [x] Changelog (CHANGELOG.md)
 
-### Next Steps (Week 7+)
-- [ ] Vim help documentation (`:help wordpred`)
-- [ ] Usage examples and screenshots
-- [ ] Advanced features (trigrams, persistence, etc.)
+### Next Steps (Week 8+)
+- [ ] Advanced features (trigrams, persistence, cross-buffer learning)
+- [ ] Integration with completion frameworks (nvim-cmp)
+- [ ] Additional language support
+
+## Documentation
+
+- **Quick Start**: See below or run `:help wordpred-quickstart`
+- **Full Documentation**: `:help wordpred` (comprehensive Vim help)
+- **Configuration Guide**: [CONFIGURATION.md](CONFIGURATION.md) (detailed options)
+- **Usage Examples**: [EXAMPLES.md](EXAMPLES.md) (12 practical examples)
+- **Quick Reference**: [QUICKREF.md](QUICKREF.md) (one-page cheat sheet)
+- **Implementation Details**: [IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)
+- **Project Plan**: [word-prediction-vim.md](../word-prediction-vim.md)
 
 ## Quick Start
 
@@ -47,9 +60,14 @@ Copy the `vim` directory to your `~/.vim` or `~/.config/nvim` directory.
 
 The plugin works automatically once installed. As you type in insert mode:
 1. Type a few characters of a word
-2. A gray prediction will appear inline
-3. Press `<Tab>` to accept the prediction
-4. Or continue typing to update/ignore it
+2. A gray prediction appears inline (with source indicator ⚡ or ●)
+3. Press `<Ctrl+J>` to accept the prediction
+4. Press `<Ctrl+N>` to cycle to next candidate
+5. Press `<Ctrl+P>` to cycle to previous candidate
+6. Or continue typing to update/ignore
+
+**New in v1.1**: Multiple candidates and visual source feedback!  
+See [NEWFEATURES.md](NEWFEATURES.md) for details.
 
 ### Demo
 
@@ -66,7 +84,15 @@ let g:wordpred_enabled = 1
 let g:wordpred_min_prefix_length = 1
 let g:wordpred_bigram_weight = 2
 let g:wordpred_filetypes = []  " empty = all filetypes
-let g:wordpred_accept_key = '<Tab>'
+
+" Keybindings (NEW in v1.1)
+let g:wordpred_accept_key = '<C-j>'      " Accept prediction
+let g:wordpred_cycle_next_key = '<C-n>'  " Next candidate
+let g:wordpred_cycle_prev_key = '<C-p>'  " Previous candidate
+
+" Visual feedback (NEW in v1.1)
+let g:wordpred_show_source = 1           " Show ⚡ for bigram, ● for unigram
+let g:wordpred_max_candidates = 5        " Max candidates to cycle through
 ```
 
 **Basic Lua (init.lua):**
@@ -76,7 +102,11 @@ require('wordpred').setup({
   min_prefix_length = 1,
   bigram_weight = 2,
   filetypes = {},
-  accept_key = '<Tab>'
+  accept_key = '<C-j>',       -- NEW: changed from <Tab>
+  cycle_next_key = '<C-n>',   -- NEW
+  cycle_prev_key = '<C-p>',   -- NEW
+  show_source = true,         -- NEW
+  max_candidates = 5          -- NEW
 })
 ```
 
@@ -121,7 +151,11 @@ See [CONFIGURATION.md](CONFIGURATION.md) for detailed configuration guide.
 ```
 vim/
 ├── README.md                     # This file
+├── CHANGELOG.md                  # ✓ Version history
 ├── CONFIGURATION.md              # ✓ Detailed configuration guide
+├── EXAMPLES.md                   # ✓ 12 usage examples
+├── QUICKREF.md                   # ✓ Quick reference card
+├── IMPLEMENTATION_SUMMARY.md     # ✓ Technical details
 ├── demo.vim                      # ✓ Interactive demo
 ├── plugin/
 │   └── wordpred.vim             # ✓ Main plugin integration
@@ -139,12 +173,15 @@ vim/
 │       ├── display.lua          # ✓ Display management
 │       └── performance.lua      # ✓ Performance monitoring
 ├── doc/
-│   └── wordpred.txt            # TODO: Vim help documentation
+│   ├── wordpred.txt             # ✓ Vim help documentation (650+ lines)
+│   └── tags                     # ✓ Generated help tags
 └── tests/
-    ├── test_analyzer.vim       # ✓ Analyzer tests
-    ├── test_predict.vim        # ✓ Predictor tests
-    ├── example_analyzer.vim    # ✓ Analyzer example
-    └── run_tests.sh            # ✓ Test runner
+    ├── test_analyzer.vim        # ✓ Analyzer tests
+    ├── test_analyzer_lua.lua    # ✓ Lua analyzer tests
+    ├── test_predict.vim         # ✓ Predictor tests
+    ├── example_analyzer.vim     # ✓ Analyzer example
+    ├── benchmark.sh             # ✓ Performance benchmark
+    └── run_tests.sh             # ✓ Test runner
 ```
 
 ## Architecture
@@ -296,11 +333,14 @@ See [word-prediction-vim.md](../word-prediction-vim.md) for the complete project
 - ✓ Buffer-local enable/disable
 - ✓ Advanced configuration guide
 
-### Phase 3: Documentation and Polish (Next)
-- [ ] Vim help documentation (`:help wordpred`)
-- [ ] Usage examples and screenshots
-- [ ] API documentation for extensibility
-- [ ] Contributing guidelines
+### Phase 3: Documentation and Polish - ✓ Completed
+- ✓ Vim help documentation (`:help wordpred`)
+- ✓ 650+ line comprehensive help file with 12 sections
+- ✓ Help tags for navigation
+- ✓ Usage examples document (12 practical scenarios)
+- ✓ Changelog with version history
+- ✓ Quick reference card
+- ✓ Complete documentation suite
 
 ### Phase 4: Advanced Features (Future)
 - [ ] Trigram model support
