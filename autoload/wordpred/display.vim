@@ -28,6 +28,11 @@ function! s:HasTextProps() abort
   return has('textprop') && has('patch-8.1.0579')
 endfunction
 
+" Check if we have popup windows (Vim 8.2+)
+function! s:HasPopup() abort
+  return has('patch-8.2.0286') && exists('*popup_create')
+endfunction
+
 " Initialize namespace for Neovim extmarks
 if s:HasVirtualText()
   let s:ns_id = nvim_create_namespace('wordpred')
@@ -56,6 +61,8 @@ function! wordpred#display#Show(prediction_text, ...) abort
   
   if s:HasVirtualText()
     call s:ShowNeovim(a:prediction_text, bufnr, line, col, source)
+  elseif s:HasPopup()
+    call s:ShowVimPopup(a:prediction_text, bufnr, line + 1, col, source)
   elseif s:HasTextProps()
     call s:ShowVim(a:prediction_text, bufnr, line + 1, col, source)
   else
@@ -93,9 +100,63 @@ endfunction
 " Get highlight group based on prediction source
 function! s:GetHighlightGroup(source) abort
   if a:source ==# 'bigram'
-    return get(g:, 'wordpred_hl_group_bigram', get(g:, 'wordpred_hl_group', 'Comment'))
+    let hl = get(g:, 'wordpred_hl_group_bigram', get(g:, 'wordpred_hl_group', 'Comment'))
   else
-    return get(g:, 'wordpred_hl_group_unigram', get(g:, 'wordpred_hl_group', 'Comment'))
+    let hl = get(g:, 'wordpred_hl_group_unigram', get(g:, 'wordpred_hl_group', 'Comment'))
+  endif
+  
+  " Check if highlight group exists, fallback to safe default
+  if hlexists(hl)
+    return hl
+  endif
+  
+  " Try common fallbacks
+  if hlexists('Comment')
+    return 'Comment'
+  elseif hlexists('NonText')
+    return 'NonText'
+  else
+    return 'Normal'
+  endif
+endfunction
+
+" Show prediction using Vim popup windows (Vim 8.2+)
+function! s:ShowVimPopup(text, bufnr, line, col, source) abort
+  " Close any existing popup
+  call s:HideVimPopup()
+  
+  " Get highlight group
+  let hl_group = s:GetHighlightGroup(a:source)
+  
+  " Add source indicator if enabled
+  let display_text = a:text
+  if get(g:, 'wordpred_show_source', 1)
+    let indicator = a:source ==# 'bigram' ? '⚡' : '●'
+    let display_text = a:text . ' ' . indicator
+  endif
+  
+  " Create popup at cursor position
+  let opts = {
+        \ 'line': 'cursor',
+        \ 'col': 'cursor',
+        \ 'pos': 'topleft',
+        \ 'wrap': 0,
+        \ 'highlight': hl_group,
+        \ 'zindex': 200,
+        \ 'moved': 'any'
+        \ }
+  
+  let w:wordpred_popup_id = popup_create(display_text, opts)
+endfunction
+
+" Hide popup window
+function! s:HideVimPopup() abort
+  if exists('w:wordpred_popup_id')
+    try
+      call popup_close(w:wordpred_popup_id)
+    catch
+    endtry
+    unlet w:wordpred_popup_id
   endif
 endfunction
 
@@ -134,6 +195,8 @@ function! wordpred#display#Hide() abort
   
   if s:HasVirtualText()
     call s:HideNeovim()
+  elseif s:HasPopup()
+    call s:HideVimPopup()
   elseif s:HasTextProps()
     call s:HideVim()
   endif

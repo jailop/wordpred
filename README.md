@@ -60,8 +60,8 @@ Copy the `vim` directory to your `~/.vim` or `~/.config/nvim` directory.
 
 The plugin works automatically once installed. As you type in insert mode:
 1. Type a few characters of a word
-2. A gray prediction appears inline (with source indicator ⚡ or ●)
-3. Press `<Ctrl+J>` to accept the prediction
+2. A gray prediction appears inline
+3. Press `<Tab>` to accept the prediction
 4. Press `<Ctrl+N>` to cycle to next candidate
 5. Press `<Ctrl+P>` to cycle to previous candidate
 6. Or continue typing to update/ignore
@@ -86,12 +86,12 @@ let g:wordpred_bigram_weight = 2
 let g:wordpred_filetypes = []  " empty = all filetypes
 
 " Keybindings (NEW in v1.1)
-let g:wordpred_accept_key = '<C-j>'      " Accept prediction
+let g:wordpred_accept_key = '<Tab>'        " Accept prediction
 let g:wordpred_cycle_next_key = '<C-n>'  " Next candidate
 let g:wordpred_cycle_prev_key = '<C-p>'  " Previous candidate
 
 " Visual feedback (NEW in v1.1)
-let g:wordpred_show_source = 1           " Show ⚡ for bigram, ● for unigram
+let g:wordpred_show_source = 0           " Set to 1 to show ⚡ for bigram, ● for unigram
 let g:wordpred_max_candidates = 5        " Max candidates to cycle through
 ```
 
@@ -102,7 +102,7 @@ require('wordpred').setup({
   min_prefix_length = 1,
   bigram_weight = 2,
   filetypes = {},
-  accept_key = '<C-j>',       -- NEW: changed from <Tab>
+  accept_key = '<Tab>',
   cycle_next_key = '<C-n>',   -- NEW
   cycle_prev_key = '<C-p>',   -- NEW
   show_source = true,         -- NEW

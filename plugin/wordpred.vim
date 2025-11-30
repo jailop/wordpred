@@ -32,7 +32,7 @@ if !exists('g:wordpred_filetypes')
 endif
 
 if !exists('g:wordpred_accept_key')
-  let g:wordpred_accept_key = '<C-j>'
+  let g:wordpred_accept_key = '<Tab>'
 endif
 
 if !exists('g:wordpred_cycle_next_key')
@@ -44,7 +44,7 @@ if !exists('g:wordpred_cycle_prev_key')
 endif
 
 if !exists('g:wordpred_show_source')
-  let g:wordpred_show_source = 1
+  let g:wordpred_show_source = 0
 endif
 
 if !exists('g:wordpred_max_candidates')

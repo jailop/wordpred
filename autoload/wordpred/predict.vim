@@ -7,7 +7,7 @@ endif
 let g:autoloaded_wordpred_predict = 1
 
 " Get the word under cursor (current prefix being typed)
-function! s:GetCurrentWord() abort
+function! wordpred#predict#GetCurrentWord() abort
   let line = getline('.')
   let col = col('.') - 1
   
@@ -26,7 +26,7 @@ function! s:GetCurrentWord() abort
 endfunction
 
 " Get the previous word before cursor
-function! s:GetPreviousWord() abort
+function! wordpred#predict#GetPreviousWord() abort
   let line = getline('.')
   let col = col('.') - 1
   
@@ -54,39 +54,48 @@ function! s:GetPreviousWord() abort
   endwhile
   
   if start < end
-    return strpart(line, start, end - start)
+    return tolower(strpart(line, start, end - start))
   endif
   
   return ''
 endfunction
 
-" Predict word using unigram model (frequency-based)
-function! wordpred#predict#PredictWordUnigram(prefix, ...) abort
+" Get multiple prediction candidates (unigram model)
+function! wordpred#predict#GetCandidatesUnigram(prefix, ...) abort
   let bufnr = a:0 > 0 ? a:1 : bufnr('%')
+  let max_candidates = a:0 > 1 ? a:2 : get(g:, 'wordpred_max_candidates', 5)
   
-  if len(a:prefix) < get(g:, 'wordpred_min_prefix_length', 1)
-    return ''
+  let min_prefix = get(g:, 'wordpred_min_prefix_length', 1)
+  if len(a:prefix) < min_prefix
+    return []
   endif
   
   " Get all words matching prefix
   let matches = wordpred#analyzer#GetWordsWithPrefix(a:prefix, bufnr)
   
   if empty(matches)
-    return ''
+    return []
   endif
   
-  " Find word with highest frequency
-  let best_word = ''
-  let max_freq = 0
-  
+  " Sort by frequency (descending)
+  let candidates = []
   for [word, freq] in items(matches)
-    if freq > max_freq
-      let max_freq = freq
-      let best_word = word
-    endif
+    call add(candidates, {'word': word, 'freq': freq, 'source': 'unigram'})
   endfor
   
-  return best_word
+  call sort(candidates, {a, b -> b.freq - a.freq})
+  
+  " Return top N candidates
+  return candidates[:max_candidates - 1]
+endfunction
+
+" Predict word using unigram model (frequency-based)
+function! wordpred#predict#PredictWordUnigram(prefix, ...) abort
+  let bufnr = a:0 > 0 ? a:1 : bufnr('%')
+  
+  let candidates = wordpred#predict#GetCandidatesUnigram(a:prefix, bufnr, 1)
+  
+  return empty(candidates) ? '' : candidates[0].word
 endfunction
 
 " Get multiple prediction candidates (bigram model)
